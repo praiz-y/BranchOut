@@ -108,4 +108,27 @@ function hitPlayer(g) {
   check('falling below the screen ends the run', g.over === 'gameover' && g.result.reason === 'fall');
 }
 
+// --- fast climbing: the camera stays calm and the player stays on screen ---
+{
+  const g = newGame();
+  let worstTop = -Infinity;
+  const speeds = [];
+  let last = g.cam.y;
+  for (let i = 0; i < 60 * 90 && !g.over; i++) {
+    // Zero-delay bot (faster than any human): jump again the instant it lands
+    const acts = g.player.jumping ? [] : [i % 3 === 0 ? 'left' : 'right'];
+    playState.update(g, 1 / 60, acts);
+    worstTop = Math.max(worstTop, g.player.y - g.cam.y);
+    speeds.push((g.cam.y - last) * 60);
+    last = g.cam.y;
+  }
+  speeds.sort((a, b) => a - b);
+  const p99 = speeds[Math.floor(speeds.length * 0.99)];
+  check('fast climbing keeps the player on screen', worstTop < g.h - 10);
+  // The cap loosens only when the player nears the top edge, so even this
+  // inhuman bot should stay close to it
+  check('the camera sits at its cap and rarely exceeds it (99% of frames within 40%)',
+    p99 <= (CFG.followMaxSpeed + CFG.scrollMax) * 1.4);
+}
+
 process.exit(failed ? 1 : 0);

@@ -58,7 +58,14 @@ if (document.fonts && document.fonts.load) {
   document.fonts.load("700 24px 'Fredoka'").catch(() => {});
 }
 
+const stage = document.getElementById('stage');
+
 function resize() {
+  // Keep the play area at least MIN_H/LOGICAL_W tall. On a short, wide window
+  // (a phone held sideways) the column gets narrower instead of the picture
+  // being squashed.
+  const maxW = Math.min(LOGICAL_W, Math.floor((window.innerHeight * LOGICAL_W) / MIN_H));
+  stage.style.maxWidth = `${Math.max(maxW, 200)}px`;
   const rect = canvas.getBoundingClientRect();
   const dpr = Math.min(window.devicePixelRatio || 1, 3);
   const aspect = rect.height / Math.max(rect.width, 1);

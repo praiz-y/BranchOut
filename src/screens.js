@@ -7,7 +7,6 @@ import { drawWorld, drawHazards } from './render.js';
 import { drawButton, drawText, drawTitleText, inRect, roundRectPath } from './ui.js';
 
 const tapPoint = (g, t) => ({ x: t.nx * g.w, y: t.ny * g.h });
-
 const click = (g) => { if (g.audio) g.audio.ui(); };
 
 function selectCharacter(g, i) {
@@ -20,33 +19,64 @@ function selectCharacter(g, i) {
 
 // ---------- Menu ----------
 
-function menuLayout(g) {
+const GROUND_FRAC = 0.93;   // where the grass starts, as a fraction of screen height
+
+// Vertical stack: fixed block heights with gaps that shrink on short windows and
+// grow (up to a limit) on tall ones, so blocks never overlap. Exported for tests.
+export function menuLayout(g) {
+  const E = { title: 100, preview: 166, name: 34, picker: 80, play: 74, best: 36 };
+  const G = { top: 28, a: 16, b: 8, c: 20, d: 26, e: 18 };
+  const sum = (o) => Object.values(o).reduce((s, v) => s + v, 0);
+
+  const groundTop = g.h * GROUND_FRAC;
+  const avail = groundTop - 12;
+  const k = Math.min(1.6, Math.max(0.35, (avail - sum(E)) / sum(G)));
+  const total = sum(E) + sum(G) * k;
+
+  let y = Math.max(0, (avail - total) / 2) + G.top * k;
+  const title = { y, h: E.title };
+  y += E.title + G.a * k;
+  const preview = { y, h: E.preview, cy: y + 105 };
+  y += E.preview + G.b * k;
+  const name = { y, h: E.name };
+  y += E.name + G.c * k;
+  const picker = { y, h: E.picker };
+  y += E.picker + G.d * k;
+  const play = { x: g.w / 2 - 125, y, w: 250, h: E.play };
+  y += E.play + G.e * k;
+  const best = { x: g.w / 2 - 90, y, w: 180, h: E.best };
+
   const cell = 72;
   const x0 = (g.w - cell * CHARACTERS.length) / 2;
-  const pickerY = g.h * 0.5;
-  return {
-    pickerY,
-    play: { x: g.w / 2 - 125, y: g.h * 0.65, w: 250, h: 74 },
-    slots: CHARACTERS.map((c, i) => ({ x: x0 + i * cell, y: pickerY - cell / 2, w: cell, h: cell })),
-  };
+  const slots = CHARACTERS.map((c, i) => ({ x: x0 + i * cell, y: picker.y, w: cell, h: E.picker }));
+
+  return { groundTop, title, preview, name, picker, play, best, slots };
 }
 
-function drawSapling(ctx, g) {
-  const groundY = g.h * 0.9;
+function drawSapling(ctx, g, groundY) {
   ctx.fillStyle = '#5fc24a';
   ctx.fillRect(0, groundY, g.w, g.h - groundY);
-  ctx.fillStyle = '#8a5a2b';
-  ctx.fillRect(0, groundY + 26, g.w, g.h - groundY - 26);
+  ctx.fillStyle = '#7a5230';
+  ctx.fillRect(0, groundY + 16, g.w, g.h - groundY - 16);
   // The twig: a tiny sapling at ground level
   const x = g.w / 2;
   ctx.fillStyle = '#7a4b20';
-  ctx.fillRect(x - 3, groundY - 38, 6, 40);
+  ctx.fillRect(x - 3, groundY - 30, 6, 32);
   ctx.fillStyle = '#3fa34d';
   ctx.beginPath();
-  ctx.ellipse(x - 14, groundY - 36, 14, 7, -0.5, 0, Math.PI * 2);
-  ctx.ellipse(x + 14, groundY - 42, 14, 7, 0.5, 0, Math.PI * 2);
+  ctx.ellipse(x - 12, groundY - 28, 12, 6, -0.5, 0, Math.PI * 2);
+  ctx.ellipse(x + 12, groundY - 34, 12, 6, 0.5, 0, Math.PI * 2);
   ctx.fill();
 }
+
+// Show the keyboard hint only where there is a mouse or keyboard
+const hasKeyboard = (() => {
+  try {
+    return !!(globalThis.matchMedia && globalThis.matchMedia('(pointer: fine)').matches);
+  } catch {
+    return false;
+  }
+})();
 
 export const menuState = {
   update(g, dt, actions) {
@@ -72,16 +102,16 @@ export const menuState = {
     sky.addColorStop(1, BIOMES[0].skyBot);
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, g.w, g.h);
-    drawSapling(ctx, g);
+    drawSapling(ctx, g, L.groundTop);
 
-    drawTitleText(ctx, 'Branch Out', g.w / 2, g.h * 0.13, 64, '#fff', '#1f7a3f');
-    drawText(ctx, 'From twig to treetop', g.w / 2, g.h * 0.13 + 50, 22, '#1f5f3f');
+    drawTitleText(ctx, 'Branch Out', g.w / 2, L.title.y + 34, 64, '#fff', '#1f7a3f');
+    drawText(ctx, 'From twig to treetop', g.w / 2, L.title.y + 84, 22, '#1f5f3f');
 
     // Big preview of the chosen animal, bobbing
     const ch = CHARACTERS[g.charIndex];
     const bob = Math.sin(g.time * 3) * 6;
-    drawCharacter(ctx, ch, g.w / 2, g.h * 0.32 + bob, 56);
-    drawText(ctx, ch.name, g.w / 2, g.h * 0.32 + 92, 26, '#1f5f3f');
+    drawCharacter(ctx, ch, g.w / 2, L.preview.cy + bob, 48);
+    drawText(ctx, ch.name, g.w / 2, L.name.y + 17, 26, '#1f5f3f');
 
     // Picker
     L.slots.forEach((s, i) => {
@@ -94,29 +124,43 @@ export const menuState = {
         ctx.strokeStyle = '#ffb703';
         ctx.stroke();
       }
-      drawCharacter(ctx, CHARACTERS[i], s.x + s.w / 2, s.y + s.h / 2 + 3, selected ? 22 : 19);
+      drawCharacter(ctx, CHARACTERS[i], s.x + s.w / 2, s.y + 46, selected ? 19 : 17);
     });
 
     drawButton(ctx, L.play, 'PLAY', { size: 38 });
+
+    // Best score in its own pill
     if (g.save.best > 0) {
-      drawText(ctx, `Best ${g.save.best}`, g.w / 2, L.play.y + L.play.h + 44, 24, '#1f5f3f');
+      roundRectPath(ctx, L.best.x, L.best.y, L.best.w, L.best.h, 18);
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = '#1f7a3f';
+      ctx.stroke();
+      drawText(ctx, `Best ${g.save.best}`, g.w / 2, L.best.y + L.best.h / 2 + 1, 21, '#1f5f3f');
     }
-    drawText(ctx, 'Tap left or right side to jump', g.w / 2, g.h * 0.83, 18, '#1f5f3f');
+
+    if (hasKeyboard) {
+      drawText(ctx, 'Arrow keys pick   Space plays   M mutes', g.w / 2, L.groundTop + (g.h - L.groundTop) * 0.62, 14, '#f4ffe9');
+    }
   },
 };
 
 // ---------- Game over ----------
 
-const SHEET_H = 420;
+const SHEET_H = 430;
 
-function sheetLayout(g) {
+// Exported for tests
+export function sheetLayout(g) {
   const x = 20;
   const w = g.w - 40;
   const y = g.h - 20 - SHEET_H;
+  const half = (w - 48 - 12) / 2;
   return {
     sheet: { x, y, w, h: SHEET_H },
-    again: { x: x + 24, y: y + 270, w: w - 48, h: 76 },
-    share: { x: x + 24, y: y + 362, w: w - 48, h: 40 },
+    again: { x: x + 24, y: y + 266, w: w - 48, h: 76 },
+    home: { x: x + 24, y: y + 364, w: half, h: 46 },
+    share: { x: x + 24 + half + 12, y: y + 364, w: half, h: 46 },
   };
 }
 
@@ -162,9 +206,11 @@ export const gameoverState = {
     if (g.time - g.overAt < 0.25) return;
     const L = sheetLayout(g);
     if (actions.includes('start')) { click(g); return g.goto('playing'); }
+    if (actions.includes('back')) { click(g); return g.goto('menu'); }
     for (const t of g.taps || []) {
       const p = tapPoint(g, t);
       if (inRect(L.again, p.x, p.y)) { click(g); return g.goto('playing'); }
+      if (inRect(L.home, p.x, p.y)) { click(g); return g.goto('menu'); }
       if (inRect(L.share, p.x, p.y)) { click(g); copyScore(g); }
     }
   },
@@ -179,7 +225,7 @@ export const gameoverState = {
     const r = g.result || { score: 0, height: 0, landings: 0, best: 0, newBest: false };
     const L = sheetLayout(g);
     const k = Math.min(1, (g.time - g.overAt) / 0.3);
-    const slide = (1 - (1 - (1 - k) * (1 - k))) * (SHEET_H + 40);
+    const slide = (1 - k) * (1 - k) * (SHEET_H + 40);
 
     ctx.save();
     ctx.translate(0, slide);
@@ -204,8 +250,11 @@ export const gameoverState = {
     drawText(ctx, ch.name, s.x + 54, s.y + 168, 15, '#555');
 
     drawButton(ctx, L.again, 'PLAY AGAIN', { size: 34 });
+    drawButton(ctx, L.home, 'Home', {
+      fill: '#7fc8ff', edge: '#2f7fb8', color: '#0d3b5e', size: 20, lift: 4,
+    });
     const copied = g.time - g.copiedAt < 1.6;
-    drawButton(ctx, L.share, copied ? 'Copied!' : 'Copy my score', {
+    drawButton(ctx, L.share, copied ? 'Copied!' : 'Copy score', {
       fill: '#ffd34d', edge: '#c28a00', color: '#5a3a00', size: 20, lift: 4,
     });
     ctx.restore();

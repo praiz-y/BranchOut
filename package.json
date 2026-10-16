@@ -9,6 +9,7 @@
     "test:rules": "node tools/rules-test.mjs",
     "test:render": "node tools/render-smoke.mjs",
     "test:art": "node tools/art-audio-smoke.mjs",
-    "test:juice": "node tools/juice-test.mjs"
+    "test:juice": "node tools/juice-test.mjs",
+    "balance": "node tools/balance-sim.mjs"
   }
 }

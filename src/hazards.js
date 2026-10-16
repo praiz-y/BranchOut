@@ -47,7 +47,7 @@ export function createHazards(rng = Math.random) {
       const maxX = CFG.W - CFG.trunkW;
       for (const h of pool) {
         if (!h.active) continue;
-        h.y += h.vy * dt;
+        h.y += (h.vy + HAZ.camFollow * (ctx.camSpeed || 0)) * dt;
         h.rot += h.spin * dt;
         if (h.sway) {
           h.x = h.baseX + Math.sin(time * 2.2 + h.phase) * h.swayAmp;
@@ -111,7 +111,7 @@ export function createHazards(rng = Math.random) {
     const speed = lerp(HAZ.speedStart, HAZ.speedMax, d) * type.speed * (0.9 + rng() * 0.2);
     const vx = type.sway ? 0 : (rng() * 2 - 1) * HAZ.driftMax * d * type.drift;
     const bandY = ctx.h * HAZ.bandFrac;
-    const fallT = (bandY - HAZ.spawnY) / speed;
+    const fallT = (bandY - HAZ.spawnY) / (speed + HAZ.camFollow * (ctx.camSpeed || 0));
     const arrive = time + HAZ.telegraph + fallT;
 
     const sideOf = (px) => (px < CFG.W / 2 ? 'left' : 'right');

@@ -1,7 +1,7 @@
 // Drawing for the play screen: sky, trunks, branches, ground, weather, hazards, HUD.
 // Everything is drawn with canvas paths, so there are no image files to load.
 
-import { CFG } from './config.js';
+import { CFG, HAZ } from './config.js';
 import { CHARACTERS, drawCharacter } from './characters.js';
 import { BIOMES, biomeAt } from './biomes.js';
 import { drawText, drawTitleText, roundRectPath } from './ui.js';
@@ -406,8 +406,39 @@ export function drawHazards(ctx, g) {
     ctx.restore();
   }
 
+  const camAdd = HAZ.camFollow * (g.camVel || 0);
   for (const h of g.hz.pool) {
     if (!h.active) continue;
+
+    // Motion streak behind the hazard, so the fall direction reads clearly
+    // even when the background is scrolling past quickly
+    const vy = h.vy + camAdd;
+    const speed = Math.hypot(h.vx || 0, vy);
+    const len = Math.min(80, speed * 0.11);
+    if (len > 8) {
+      const ux = (h.vx || 0) / speed;
+      const uy = vy / speed;
+      ctx.save();
+      ctx.lineCap = 'round';
+      for (const [w, a, f] of [[1.5, 0.16, 1], [1.0, 0.24, 0.7], [0.5, 0.34, 0.4]]) {
+        ctx.strokeStyle = `rgba(255,255,255,${a})`;
+        ctx.lineWidth = h.r * w;
+        ctx.beginPath();
+        ctx.moveTo(h.x, h.y);
+        ctx.lineTo(h.x - ux * len * f, h.y - uy * len * f);
+        ctx.stroke();
+      }
+      ctx.strokeStyle = 'rgba(58,36,16,0.22)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(h.x - h.r * 0.5, h.y - uy * 4);
+      ctx.lineTo(h.x - h.r * 0.5 - ux * len * 0.9, h.y - uy * len * 0.9);
+      ctx.moveTo(h.x + h.r * 0.5, h.y - uy * 4);
+      ctx.lineTo(h.x + h.r * 0.5 - ux * len * 0.9, h.y - uy * len * 0.9);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     ctx.save();
     ctx.translate(h.x, h.y);
     ctx.rotate(h.rot);

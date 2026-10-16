@@ -28,6 +28,7 @@ export const CFG = {
   scrollMax: 110,
   followLine: 0.55,       // camera is pushed up if the player passes this fraction of screen height
   followRate: 6,
+  followMaxSpeed: 450,    // the follow push is capped so the background never whips past (px/s)
   deathMargin: 24,        // falling this far below the bottom edge ends the run
 
   playerR: 20,
@@ -61,6 +62,8 @@ export const HAZ = {
   aimJitter: 45,
   maxActive: 20,
   hitScale: 0.8,          // hitbox is smaller than the artwork
+  camFollow: 0.3,         // share of the camera's climb speed added to the fall speed, so hazards
+                          // still look like they fall when the background scrolls past fast
   types: {
     pinecone: { r: 16, speed: 1.0, drift: 0.0, spin: 2 },
     twig: { r: 14, speed: 1.25, drift: 0.3, spin: 5 },

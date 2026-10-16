@@ -41,7 +41,8 @@ for (const climbed of [0, 3000, 6000]) {
     };
 
     for (let t = 0; t < seconds; t += DT) {
-      hz.update(DT, { h: H, climbed, aimX: 100 + rng() * 280 });
+      // camSpeed varies like a fast climber's camera (0 to 560 px/s)
+      hz.update(DT, { h: H, climbed, aimX: 100 + rng() * 280, camSpeed: 280 + 280 * Math.sin(t * 0.7 + r) });
       maxActive = Math.max(maxActive, hz.activeCount());
       for (const h of hz.pool) if (h.active && h.y > 0 && h.y < HAZ.spawnY + 1) spawnedOnScreen++;
     }

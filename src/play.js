@@ -119,6 +119,7 @@ export const playState = {
     g.world = createWorld();
     g.player = createPlayer(g.world.start);
     g.cam = { y: 0 };
+    g.camVel = 0;
     g.fx = createFx();
     g.dying = null;
     g.hz = createHazards();
@@ -188,9 +189,18 @@ export const playState = {
 
     // Camera rises steadily; it is pushed up if the player climbs past the follow line
     const climbed = Math.max(0, player.maxY - CFG.startY);
+    const camBefore = cam.y;
     cam.y += scrollSpeed(climbed) * dt;
     const over = player.y - cam.y - g.h * CFG.followLine;
-    if (over > 0) cam.y += over * Math.min(1, CFG.followRate * dt);
+    if (over > 0) {
+      // Cap the push so the background never whips past, but allow more
+      // if the player gets close to the top edge
+      const want = over * Math.min(1, CFG.followRate * dt);
+      const nearTop = Math.max(0, player.y - cam.y - g.h * 0.8);
+      cam.y += Math.min(want, (CFG.followMaxSpeed + nearTop * 12) * dt);
+    }
+    // Smoothed camera speed, used to keep hazards looking like they fall
+    g.camVel += ((cam.y - camBefore) / dt - g.camVel) * Math.min(1, 8 * dt);
 
     world.ensure(cam.y + g.h + 600);
     world.prune(cam.y);
@@ -198,7 +208,7 @@ export const playState = {
     // Hazards (screen space). They aim near where the player is, or is jumping to.
     const feetY = toScreenY(g, player.y);
     const aimX = player.jumping ? player.to.landX : player.x;
-    hz.update(dt, { h: g.h, climbed, aimX });
+    hz.update(dt, { h: g.h, climbed, aimX, camSpeed: g.camVel });
 
     if (run.invuln <= 0 && hz.collide(player.x, feetY - CFG.playerR, CFG.playerR * 0.8)) {
       onHit(g);

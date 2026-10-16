@@ -15,6 +15,8 @@ const KEY_ACTIONS = {
   KeyD: 'right',
   Space: 'start',
   Enter: 'start',
+  Escape: 'back',
+  KeyH: 'back',
 };
 
 export function createInput(canvas) {
