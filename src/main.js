@@ -3,7 +3,9 @@ import { createStateMachine } from './state.js';
 import { playState } from './play.js';
 import { menuState, gameoverState } from './screens.js';
 import { CHARACTERS } from './characters.js';
-import { loadSave } from './storage.js';
+import { loadSave, persist } from './storage.js';
+import { createAudio } from './audio.js';
+import { drawMuteButton, MUTE_RECT, inRect } from './ui.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -34,6 +36,28 @@ const game = {
 
 const input = createInput(canvas);
 
+// Audio: created on the first tap or key press (browser rule), muted state is saved
+const audio = createAudio();
+audio.setMuted(save.muted);
+game.audio = audio;
+const unlockAudio = () => audio.unlock();
+window.addEventListener('pointerdown', unlockAudio);
+window.addEventListener('keydown', unlockAudio);
+
+function toggleMute() {
+  audio.setMuted(!audio.muted);
+  save.muted = audio.muted;
+  persist(save);
+}
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyM' && !e.repeat) toggleMute();
+});
+
+// Load the title font before first use so canvas text does not fall back
+if (document.fonts && document.fonts.load) {
+  document.fonts.load("700 24px 'Fredoka'").catch(() => {});
+}
+
 function resize() {
   const rect = canvas.getBoundingClientRect();
   const dpr = Math.min(window.devicePixelRatio || 1, 3);
@@ -51,8 +75,14 @@ resize();
 
 const states = { menu: menuState, playing: playState, gameover: gameoverState };
 const sm = createStateMachine(states, 'menu');
-game.goto = (name) => sm.go(name, game);
+const MUSIC_LEVEL = { menu: 0.55, playing: 1, gameover: 0.2 };
+game.goto = (name) => {
+  sm.go(name, game);
+  audio.musicLevel(MUSIC_LEVEL[name] ?? 1);
+};
 sm.start(game);
+audio.music(true);
+audio.musicLevel(MUSIC_LEVEL.menu);
 
 // --- Debug overlay (?debug in the URL, or press the backtick key) ---
 
@@ -91,13 +121,19 @@ function frame(now) {
   acc += dt;
 
   while (acc >= STEP) {
-    game.taps = input.drainTaps();
+    // The mute button works on every screen and swallows its own taps
+    game.taps = input.drainTaps().filter((t) => {
+      if (!inRect(MUTE_RECT, t.nx * game.w, t.ny * game.h)) return true;
+      toggleMute();
+      return false;
+    });
     sm.update(game, STEP, input.drain());
     game.time += STEP;
     acc -= STEP;
   }
 
   sm.render(game, ctx);
+  drawMuteButton(ctx, audio.muted);
   if (game.debug) drawDebug();
 
   fpsFrames++;
@@ -116,6 +152,8 @@ document.addEventListener('visibilitychange', () => {
   last = performance.now();
   acc = 0;
   input.clear();
+  if (document.hidden) audio.suspend();
+  else audio.resume();
 });
 
 requestAnimationFrame(frame);

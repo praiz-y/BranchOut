@@ -1,6 +1,55 @@
 // Small canvas UI helpers: rounded rects, buttons, outlined text, hit testing.
 
-export const FONT = "'Trebuchet MS', 'Arial Rounded MT Bold', system-ui, sans-serif";
+// Fredoka is loaded from Google Fonts in index.html; the rest is the fallback
+export const FONT = "'Fredoka', 'Trebuchet MS', 'Arial Rounded MT Bold', system-ui, sans-serif";
+
+// Mute button: same spot on every screen, below the HUD row at the top right
+export const MUTE_RECT = { x: 418, y: 72, w: 50, h: 50 };
+
+export function drawMuteButton(ctx, muted) {
+  const b = MUTE_RECT;
+  const cx = b.x + b.w / 2;
+  const cy = b.y + b.h / 2;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, 21, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255,255,255,0.8)';
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#1f5f3f';
+  ctx.stroke();
+
+  // Speaker
+  ctx.fillStyle = '#1f5f3f';
+  ctx.beginPath();
+  ctx.moveTo(cx - 10, cy - 4);
+  ctx.lineTo(cx - 5, cy - 4);
+  ctx.lineTo(cx + 2, cy - 10);
+  ctx.lineTo(cx + 2, cy + 10);
+  ctx.lineTo(cx - 5, cy + 4);
+  ctx.lineTo(cx - 10, cy + 4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#1f5f3f';
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = 'round';
+  if (muted) {
+    ctx.beginPath();
+    ctx.moveTo(cx + 6, cy - 5);
+    ctx.lineTo(cx + 14, cy + 5);
+    ctx.moveTo(cx + 14, cy - 5);
+    ctx.lineTo(cx + 6, cy + 5);
+    ctx.stroke();
+  } else {
+    ctx.beginPath();
+    ctx.arc(cx + 3, cy, 7, -0.9, 0.9);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx + 3, cy, 12, -0.9, 0.9);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
 
 export function roundRectPath(ctx, x, y, w, h, r) {
   const rad = Math.min(r, w / 2, h / 2);

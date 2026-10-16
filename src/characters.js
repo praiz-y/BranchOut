@@ -84,7 +84,8 @@ export function drawCharacter(ctx, ch, cx, cy, r) {
   // Eyes
   const eye = (x, y, rad) => {
     circle(x, y, rad, '#fff', ch.id === 'frog');
-    circle(x + rad * 0.15, y + rad * 0.1, rad * 0.5, '#1c1c1c', false);
+    circle(x + rad * 0.15, y + rad * 0.1, rad * 0.55, '#1c1c1c', false);
+    circle(x + rad * 0.32, y - rad * 0.12, rad * 0.2, '#fff', false); // shine
   };
   if (ch.id === 'frog') {
     eye(cx - r * 0.5, cy - r * 0.78, r * 0.33);
@@ -93,6 +94,10 @@ export function drawCharacter(ctx, ch, cx, cy, r) {
     eye(cx - r * 0.34, cy - r * 0.1, r * 0.2);
     eye(cx + r * 0.34, cy - r * 0.1, r * 0.2);
   }
+
+  // Cheeks
+  circle(cx - r * 0.64, cy + r * 0.14, r * 0.13, 'rgba(255,100,130,0.4)', false);
+  circle(cx + r * 0.64, cy + r * 0.14, r * 0.13, 'rgba(255,100,130,0.4)', false);
 
   // Nose and mouth
   if (ch.id === 'frog') {

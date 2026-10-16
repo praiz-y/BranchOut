@@ -106,7 +106,7 @@ run('game over: new best is recorded and the sheet renders', () => {
   playState.enter(g);
   g.run.score = 500;
   g.player.y = -1000; // below the screen: forces the fall game over
-  playState.update(g, 1 / 60, []);
+  for (let i = 0; i < 60 && !g.next; i++) playState.update(g, 1 / 60, []); // short death beat
   if (g.next !== 'gameover') throw new Error('did not end');
   if (!g.result.newBest || g.save.best !== 500 || g.result.best !== 500) throw new Error('best not updated');
   gameoverState.enter(g);
@@ -120,7 +120,7 @@ run('game over: a lower score keeps the old best; restart works after the lock',
   playState.enter(g);
   g.run.score = 30;
   g.player.y = -1000;
-  playState.update(g, 1 / 60, []);
+  for (let i = 0; i < 60 && !g.next; i++) playState.update(g, 1 / 60, []);
   if (g.result.newBest || g.save.best !== 120) throw new Error('best overwritten');
   g.next = null;
   gameoverState.enter(g);

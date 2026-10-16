@@ -2,12 +2,16 @@
 
 import { CHARACTERS, drawCharacter } from './characters.js';
 import { persist } from './storage.js';
+import { BIOMES } from './biomes.js';
 import { drawWorld, drawHazards } from './render.js';
 import { drawButton, drawText, drawTitleText, inRect, roundRectPath } from './ui.js';
 
 const tapPoint = (g, t) => ({ x: t.nx * g.w, y: t.ny * g.h });
 
+const click = (g) => { if (g.audio) g.audio.ui(); };
+
 function selectCharacter(g, i) {
+  click(g);
   const n = CHARACTERS.length;
   g.charIndex = ((i % n) + n) % n;
   g.save.char = CHARACTERS[g.charIndex].id;
@@ -48,13 +52,13 @@ export const menuState = {
   update(g, dt, actions) {
     const L = menuLayout(g);
     for (const a of actions) {
-      if (a === 'start') return g.goto('playing');
+      if (a === 'start') { click(g); return g.goto('playing'); }
       if (a === 'left') selectCharacter(g, g.charIndex - 1);
       if (a === 'right') selectCharacter(g, g.charIndex + 1);
     }
     for (const t of g.taps || []) {
       const p = tapPoint(g, t);
-      if (inRect(L.play, p.x, p.y)) return g.goto('playing');
+      if (inRect(L.play, p.x, p.y)) { click(g); return g.goto('playing'); }
       L.slots.forEach((s, i) => {
         if (inRect(s, p.x, p.y)) selectCharacter(g, i);
       });
@@ -64,8 +68,8 @@ export const menuState = {
   render(g, ctx) {
     const L = menuLayout(g);
     const sky = ctx.createLinearGradient(0, 0, 0, g.h);
-    sky.addColorStop(0, '#8fdcff');
-    sky.addColorStop(1, '#d9f6c4');
+    sky.addColorStop(0, BIOMES[0].skyTop);
+    sky.addColorStop(1, BIOMES[0].skyBot);
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, g.w, g.h);
     drawSapling(ctx, g);
@@ -157,11 +161,11 @@ export const gameoverState = {
     // Short lock so a panicked tap during death does not skip the screen
     if (g.time - g.overAt < 0.25) return;
     const L = sheetLayout(g);
-    if (actions.includes('start')) return g.goto('playing');
+    if (actions.includes('start')) { click(g); return g.goto('playing'); }
     for (const t of g.taps || []) {
       const p = tapPoint(g, t);
-      if (inRect(L.again, p.x, p.y)) return g.goto('playing');
-      if (inRect(L.share, p.x, p.y)) copyScore(g);
+      if (inRect(L.again, p.x, p.y)) { click(g); return g.goto('playing'); }
+      if (inRect(L.share, p.x, p.y)) { click(g); copyScore(g); }
     }
   },
 
