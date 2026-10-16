@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+.cache/
+.parcel-cache/
+
+# Environment and secrets
+.env
+.env.*
+*.pem
+*.key
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+
+# Hosting tool folders
+.vercel/
+.netlify/
+.wrangler/
+
+# Local scratch
+tmp/
+*.local
