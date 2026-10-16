@@ -1,5 +1,6 @@
 import { createInput } from './input.js';
 import { createStateMachine } from './state.js';
+import { playState } from './play.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -20,7 +21,7 @@ const game = {
   time: 0,
   debug: new URLSearchParams(location.search).has('debug'),
   fps: 0,
-  placeholder: { x: LOGICAL_W / 2, y: 0 },
+  result: null,
 };
 
 const input = createInput(canvas);
@@ -67,42 +68,29 @@ const states = {
       centerText('Tap or press Space to play', g.h * 0.6, 24);
     },
   },
-  playing: {
-    enter(g) {
-      g.placeholder.x = g.w / 2;
-      g.placeholder.y = g.h * 0.7;
-    },
-    update(g, dt, actions) {
-      for (const a of actions) {
-        if (a === 'left') g.placeholder.x = Math.max(40, g.placeholder.x - 60);
-        if (a === 'right') g.placeholder.x = Math.min(g.w - 40, g.placeholder.x + 60);
-      }
-      // Phase 0 stand-in for dying: fall off the bottom
-      g.placeholder.y += 120 * dt;
-      if (g.placeholder.y > g.h + 40) sm.go('gameover', g);
-    },
-    render(g) {
-      drawBackground('#9be3a0');
-      ctx.fillStyle = '#e8590c';
-      ctx.beginPath();
-      ctx.arc(g.placeholder.x, g.placeholder.y, 28, 0, Math.PI * 2);
-      ctx.fill();
-      centerText('Left / right to move', 60, 22, '#1f5f3f');
-    },
-  },
+  playing: playState,
   gameover: {
+    enter(g) {
+      g.overAt = g.time;
+    },
     update(g, dt, actions) {
+      // Short lock so a panicked tap on death does not instantly restart
+      if (g.time - g.overAt < 0.25) return;
       if (actions.includes('start')) sm.go('playing', g);
     },
     render(g) {
       drawBackground('#ffb4a2');
-      centerText('Game over', g.h * 0.42, 48, '#7a1f12');
-      centerText('Tap or press Space to retry', g.h * 0.58, 24, '#7a1f12');
+      const r = g.result || { height: 0, landings: 0 };
+      centerText('Game over', g.h * 0.36, 48, '#7a1f12');
+      centerText(`${r.height} m`, g.h * 0.46, 40, '#7a1f12');
+      centerText(`${r.landings} landings`, g.h * 0.52, 22, '#7a1f12');
+      centerText('Tap or press Space to retry', g.h * 0.64, 24, '#7a1f12');
     },
   },
 };
 
 const sm = createStateMachine(states, 'menu');
+game.goto = (name) => sm.go(name, game);
 sm.start(game);
 
 // --- Debug overlay (?debug in the URL, or press the backtick key) ---
