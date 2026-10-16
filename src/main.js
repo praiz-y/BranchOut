@@ -1,6 +1,9 @@
 import { createInput } from './input.js';
 import { createStateMachine } from './state.js';
 import { playState } from './play.js';
+import { menuState, gameoverState } from './screens.js';
+import { CHARACTERS } from './characters.js';
+import { loadSave } from './storage.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -14,6 +17,8 @@ const MAX_H = 1100;
 const STEP = 1 / 60;       // fixed update step (seconds)
 const MAX_FRAME = 0.25;    // clamp long frames (tab switch, debugger)
 
+const save = loadSave();
+
 const game = {
   w: LOGICAL_W,
   h: 854,
@@ -22,6 +27,9 @@ const game = {
   debug: new URLSearchParams(location.search).has('debug'),
   fps: 0,
   result: null,
+  taps: [],
+  save,
+  charIndex: Math.max(0, CHARACTERS.findIndex((c) => c.id === save.char)),
 };
 
 const input = createInput(canvas);
@@ -41,54 +49,7 @@ window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', resize);
 resize();
 
-// --- Placeholder states (replaced in later phases) ---
-
-function drawBackground(color) {
-  ctx.fillStyle = color;
-  ctx.fillRect(0, 0, game.w, game.h);
-}
-
-function centerText(text, y, size, color = '#fff') {
-  ctx.fillStyle = color;
-  ctx.font = `bold ${size}px system-ui, sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(text, game.w / 2, y);
-}
-
-const states = {
-  menu: {
-    update(g, dt, actions) {
-      if (actions.includes('start')) sm.go('playing', g);
-    },
-    render(g) {
-      drawBackground('#7fd6ff');
-      centerText('Branch Out', g.h * 0.38, 56, '#1f5f3f');
-      centerText('From twig to treetop', g.h * 0.38 + 48, 22, '#1f5f3f');
-      centerText('Tap or press Space to play', g.h * 0.6, 24);
-    },
-  },
-  playing: playState,
-  gameover: {
-    enter(g) {
-      g.overAt = g.time;
-    },
-    update(g, dt, actions) {
-      // Short lock so a panicked tap on death does not instantly restart
-      if (g.time - g.overAt < 0.25) return;
-      if (actions.includes('start')) sm.go('playing', g);
-    },
-    render(g) {
-      drawBackground('#ffb4a2');
-      const r = g.result || { score: 0, height: 0, landings: 0 };
-      centerText('Game over', g.h * 0.32, 48, '#7a1f12');
-      centerText(`${r.score}`, g.h * 0.43, 56, '#7a1f12');
-      centerText(`${r.height} m   ${r.landings} landings`, g.h * 0.51, 22, '#7a1f12');
-      centerText('Tap or press Space to retry', g.h * 0.64, 24, '#7a1f12');
-    },
-  },
-};
-
+const states = { menu: menuState, playing: playState, gameover: gameoverState };
 const sm = createStateMachine(states, 'menu');
 game.goto = (name) => sm.go(name, game);
 sm.start(game);
@@ -130,6 +91,7 @@ function frame(now) {
   acc += dt;
 
   while (acc >= STEP) {
+    game.taps = input.drainTaps();
     sm.update(game, STEP, input.drain());
     game.time += STEP;
     acc -= STEP;

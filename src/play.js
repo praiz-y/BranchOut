@@ -4,7 +4,9 @@ import { CFG, RUN, scrollSpeed } from './config.js';
 import { createWorld } from './world.js';
 import { createPlayer, pressDirection, updatePlayer } from './player.js';
 import { createHazards } from './hazards.js';
-import { drawWorld, drawHazards, drawHud, toScreenY } from './render.js';
+import { CHARACTERS } from './characters.js';
+import { persist } from './storage.js';
+import { drawWorld, drawHazards, drawHud, drawHint, toScreenY } from './render.js';
 
 const metres = (g) => Math.max(0, Math.floor((g.player.maxY - CFG.startY) / CFG.unitsPerMeter));
 
@@ -24,10 +26,19 @@ function onHit(run) {
 }
 
 function endRun(g, reason) {
+  const score = g.run.score;
+  const prevBest = g.save ? g.save.best : 0;
+  const newBest = score > prevBest;
+  if (g.save && newBest) {
+    g.save.best = score;
+    persist(g.save);
+  }
   g.result = {
-    score: g.run.score,
+    score,
     height: metres(g),
     landings: g.player.landings,
+    best: Math.max(score, prevBest),
+    newBest,
     reason,
   };
   g.goto('gameover');
@@ -40,6 +51,9 @@ export const playState = {
     g.cam = { y: 0 };
     g.hz = createHazards();
     g.run = { score: 0, hearts: RUN.hearts, invuln: 0, streak: 0, mult: 1, lastLand: -99, t: 0 };
+    g.character = CHARACTERS[g.charIndex || 0];
+    // First ever run: show the tap hint, and hold the world until the first jump
+    g.hint = g.save ? !g.save.seenHint : false;
     g.world.ensure(g.cam.y + g.h + 600);
   },
 
@@ -48,11 +62,27 @@ export const playState = {
     run.t += dt;
     run.invuln = Math.max(0, run.invuln - dt);
 
-    for (const a of actions) {
-      if (a === 'left' || a === 'right') pressDirection(player, world, a);
-    }
+    // Keyboard actions plus screen taps (left or right half) both mean "jump that way"
+    const moves = actions.filter((a) => a === 'left' || a === 'right');
+    for (const t of g.taps || []) moves.push(t.nx < 0.5 ? 'left' : 'right');
+    for (const a of moves) pressDirection(player, world, a);
+
     const events = updatePlayer(player, world, dt);
     if (events.includes('land')) onLand(run);
+
+    // Tutorial hold: nothing moves until the player makes their first jump
+    if (g.hint) {
+      if (player.jumping || player.landings > 0) {
+        g.hint = false;
+        if (g.save) {
+          g.save.seenHint = true;
+          persist(g.save);
+        }
+      } else {
+        return;
+      }
+    }
+
     // The streak lapses if the player waits too long between landings
     if (run.t - run.lastLand > RUN.streakWindow) {
       run.streak = 0;
@@ -86,5 +116,6 @@ export const playState = {
     drawWorld(ctx, g);
     drawHazards(ctx, g);
     drawHud(ctx, g, metres(g));
+    if (g.hint) drawHint(ctx, g);
   },
 };

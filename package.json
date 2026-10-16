@@ -6,6 +6,7 @@
     "start": "npx serve .",
     "sim": "node tools/sim.mjs",
     "test:hazards": "node tools/hazard-sim.mjs",
-    "test:rules": "node tools/rules-test.mjs"
+    "test:rules": "node tools/rules-test.mjs",
+    "test:render": "node tools/render-smoke.mjs"
   }
 }

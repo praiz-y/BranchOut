@@ -1,6 +1,12 @@
-// Input plumbing: pointer (touch + mouse) and keyboard are normalised into
-// a queue of actions: 'left' | 'right' | 'start'. The game drains the queue
-// once per fixed update, so input is never lost between frames.
+// Input plumbing: pointer (touch + mouse) and keyboard.
+//
+// Keyboard becomes actions: 'left' | 'right' | 'start'.
+// Pointer becomes taps with normalised coordinates { nx, ny } (0..1 across the
+// canvas). Screens decide what a tap means: a button press in menus, a
+// left/right jump during play.
+//
+// Both queues are drained once per fixed update, so input is never lost
+// between frames.
 
 const KEY_ACTIONS = {
   ArrowLeft: 'left',
@@ -12,26 +18,27 @@ const KEY_ACTIONS = {
 };
 
 export function createInput(canvas) {
-  const queue = [];
+  const actions = [];
+  const taps = [];
 
-  function push(action) {
-    // Cap the queue so a stuck key or tap storm cannot grow it unbounded
-    if (queue.length < 8) queue.push(action);
-  }
+  // Cap the queues so a stuck key or tap storm cannot grow them unbounded
+  const pushAction = (a) => { if (actions.length < 8) actions.push(a); };
+  const pushTap = (t) => { if (taps.length < 8) taps.push(t); };
 
   canvas.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     const rect = canvas.getBoundingClientRect();
-    const side = e.clientX - rect.left < rect.width / 2 ? 'left' : 'right';
-    push(side);
-    push('start'); // a tap also starts / restarts from non-play screens
+    pushTap({
+      nx: (e.clientX - rect.left) / rect.width,
+      ny: (e.clientY - rect.top) / rect.height,
+    });
   });
 
   window.addEventListener('keydown', (e) => {
     const action = KEY_ACTIONS[e.code];
     if (!action || e.repeat) return;
     e.preventDefault();
-    push(action);
+    pushAction(action);
   });
 
   // Block gestures that would scroll, zoom or open menus mid-game
@@ -40,12 +47,15 @@ export function createInput(canvas) {
   document.addEventListener('dblclick', (e) => e.preventDefault());
 
   return {
-    // Remove and return all queued actions
     drain() {
-      return queue.splice(0, queue.length);
+      return actions.splice(0, actions.length);
+    },
+    drainTaps() {
+      return taps.splice(0, taps.length);
     },
     clear() {
-      queue.length = 0;
+      actions.length = 0;
+      taps.length = 0;
     },
   };
 }

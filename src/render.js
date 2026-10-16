@@ -1,6 +1,8 @@
 // Placeholder drawing for Phase 1. Real art arrives in Phase 5.
 
 import { CFG } from './config.js';
+import { CHARACTERS, drawCharacter } from './characters.js';
+import { drawText, roundRectPath } from './ui.js';
 
 // World height to screen y (world y grows up, screen y grows down)
 export const toScreenY = (g, wy) => g.h - (wy - g.cam.y);
@@ -50,21 +52,42 @@ function drawPlayer(ctx, g, p) {
   const blink = run && run.invuln > 0 && Math.floor(run.t * 10) % 2 === 0;
   ctx.save();
   if (blink) ctx.globalAlpha = 0.3;
-  ctx.fillStyle = '#e8590c';
-  ctx.beginPath();
-  ctx.arc(sx, sy, CFG.playerR, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#fff';
-  ctx.beginPath();
-  ctx.arc(sx - 7, sy - 4, 5, 0, Math.PI * 2);
-  ctx.arc(sx + 7, sy - 4, 5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#222';
-  ctx.beginPath();
-  ctx.arc(sx - 7, sy - 4, 2, 0, Math.PI * 2);
-  ctx.arc(sx + 7, sy - 4, 2, 0, Math.PI * 2);
-  ctx.fill();
+  // Drawn slightly larger than the hitbox so hits feel fair
+  drawCharacter(ctx, g.character || CHARACTERS[0], sx, sy, CFG.playerR + 3);
   ctx.restore();
+}
+
+// Ghost hand showing the first-time player where to tap
+export function drawHint(ctx, g) {
+  const side = Math.floor(g.run.t / 1.4) % 2 === 0 ? 'right' : 'left';
+  const x = side === 'right' ? g.w * 0.75 : g.w * 0.25;
+  const y = g.h * 0.5;
+  const press = (Math.sin(g.run.t * 6) + 1) / 2;
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.fillRect(side === 'right' ? g.w / 2 : 0, 0, g.w / 2, g.h);
+
+  ctx.translate(x, y + press * 10);
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(0, 0, 22 + press * 14, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.fillStyle = '#fff';
+  ctx.strokeStyle = '#3a2a1c';
+  ctx.lineWidth = 3;
+  roundRectPath(ctx, -10, 0, 20, 52, 10);
+  ctx.fill();
+  ctx.stroke();
+  roundRectPath(ctx, -26, 36, 52, 44, 16);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  drawText(ctx, 'Tap left or right to jump', g.w / 2, g.h * 0.3, 26, '#fff');
+  drawText(ctx, 'Hold on: the tree waits for your first jump', g.w / 2, g.h * 0.3 + 34, 16, '#fff');
 }
 
 function heartPath(ctx, x, y, s) {
@@ -169,12 +192,4 @@ export function drawWorld(ctx, g) {
     for (const b of g.world.lists[side]) drawBranch(ctx, g, b);
   }
   drawPlayer(ctx, g, g.player);
-}
-
-export function drawText(ctx, text, x, y, size, color = '#fff', align = 'center') {
-  ctx.fillStyle = color;
-  ctx.font = `bold ${size}px system-ui, sans-serif`;
-  ctx.textAlign = align;
-  ctx.textBaseline = 'middle';
-  ctx.fillText(text, x, y);
 }
