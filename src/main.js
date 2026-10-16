@@ -80,10 +80,10 @@ const states = {
     },
     render(g) {
       drawBackground('#ffb4a2');
-      const r = g.result || { height: 0, landings: 0 };
-      centerText('Game over', g.h * 0.36, 48, '#7a1f12');
-      centerText(`${r.height} m`, g.h * 0.46, 40, '#7a1f12');
-      centerText(`${r.landings} landings`, g.h * 0.52, 22, '#7a1f12');
+      const r = g.result || { score: 0, height: 0, landings: 0 };
+      centerText('Game over', g.h * 0.32, 48, '#7a1f12');
+      centerText(`${r.score}`, g.h * 0.43, 56, '#7a1f12');
+      centerText(`${r.height} m   ${r.landings} landings`, g.h * 0.51, 22, '#7a1f12');
       centerText('Tap or press Space to retry', g.h * 0.64, 24, '#7a1f12');
     },
   },

@@ -33,6 +33,46 @@ export const CFG = {
   playerR: 20,
 };
 
+// Run rules: hearts, damage, scoring
+export const RUN = {
+  hearts: 3,
+  invuln: 1.0,            // seconds of protection after a hit
+  landPoints: 10,
+  hitPenalty: 15,
+  streakWindow: 0.9,      // landings closer together than this build a streak
+  streakStep: 5,          // streak length per multiplier step: 5 -> x2, 10 -> x3, 15 -> x4
+  streakMax: 4,
+};
+
+// Falling hazards. Positions are in screen space so fall speed does not
+// depend on camera movement.
+export const HAZ = {
+  telegraph: 0.6,         // warning time before a hazard enters the screen
+  intervalStart: 2.4,     // seconds between spawns at the start
+  intervalMin: 0.8,       // ... and at full difficulty
+  speedStart: 280,        // px/s
+  speedMax: 520,
+  rampUnits: 6000,        // height over which difficulty reaches its maximum
+  driftMax: 60,           // px/s sideways drift at full difficulty
+  spawnY: -40,
+  bandFrac: 0.6,          // screen fraction (from top) where the player usually stands
+  conflictWindow: 0.9,    // hazards on opposite sides must arrive this far apart
+  aimChance: 0.6,         // chance a hazard is aimed near the player
+  aimJitter: 45,
+  maxActive: 20,
+  hitScale: 0.8,          // hitbox is smaller than the artwork
+  types: {
+    pinecone: { r: 16, speed: 1.0, drift: 0.0, spin: 2 },
+    twig: { r: 14, speed: 1.25, drift: 0.3, spin: 5 },
+    leaf: { r: 15, speed: 0.7, drift: 0.0, spin: 3, sway: true },
+  },
+};
+
+// 0 at the start, 1 at full difficulty
+export function ramp(climbed) {
+  return Math.min(1, Math.max(0, climbed / HAZ.rampUnits));
+}
+
 export function scrollSpeed(climbed) {
   return Math.min(CFG.scrollMax, CFG.scrollBase + climbed * CFG.scrollGain);
 }
