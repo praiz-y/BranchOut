@@ -15,19 +15,19 @@ const RAW = [
     name: 'Autumn', at: 50,
     skyTop: '#ff9f68', skyBot: '#ffe7b0', cloud: '#fff1dd', hill: '#f0b35a',
     trunk: '#7d4a20', trunkDark: '#4d2a0e', branch: '#a8692f', branchLight: '#d79a58',
-    leaf: '#f08a2c', leafDark: '#b3501a', fog: 0, rain: 0, flash: 0,
+    leaf: '#f08a2c', leafDark: '#b3501a', fog: 0, rain: 0, flash: 0, wind: 1,
   },
   {
     name: 'Mist', at: 120,
     skyTop: '#9db6c6', skyBot: '#e3ebee', cloud: '#f5f9fa', hill: '#b9cfca',
     trunk: '#6f5b49', trunkDark: '#43352a', branch: '#8f7761', branchLight: '#b8a086',
-    leaf: '#6fa58d', leafDark: '#437662', fog: 0.55, rain: 0, flash: 0,
+    leaf: '#6fa58d', leafDark: '#437662', fog: 0.55, rain: 0, flash: 0, hazFade: 1,
   },
   {
     name: 'Storm', at: 220,
     skyTop: '#2b3452', skyBot: '#66769a', cloud: '#8892ad', hill: '#46547a',
     trunk: '#54443a', trunkDark: '#2a1f19', branch: '#7a6354', branchLight: '#a08672',
-    leaf: '#4f8a72', leafDark: '#2b5645', fog: 0.2, rain: 1, flash: 1, sun: 0,
+    leaf: '#4f8a72', leafDark: '#2b5645', fog: 0.2, rain: 1, flash: 1, sun: 0, wind: 1.3, hazFade: 0.4,
   },
   {
     // Above the storm: the sun comes up and the climb goes on in golden light
@@ -41,7 +41,8 @@ const RAW = [
 export const SUMMIT_M = 400;
 
 const COLOR_KEYS = ['skyTop', 'skyBot', 'cloud', 'hill', 'trunk', 'trunkDark', 'branch', 'branchLight', 'leaf', 'leafDark'];
-const NUM_KEYS = ['fog', 'rain', 'flash', 'sun'];
+// wind: how windy (gusts push hazards sideways); hazFade: how much hazards fade in late (mist)
+const NUM_KEYS = ['fog', 'rain', 'flash', 'sun', 'wind', 'hazFade'];
 
 const parseHex = (s) => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16));
 

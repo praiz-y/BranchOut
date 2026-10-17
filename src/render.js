@@ -1,7 +1,7 @@
 // Drawing for the play screen: sky, trunks, branches, ground, weather, hazards, HUD.
 // Everything is drawn with canvas paths, so there are no image files to load.
 
-import { CFG, HAZ } from './config.js';
+import { CFG } from './config.js';
 import { CHARACTERS, drawCharacter } from './characters.js';
 import { BIOMES, biomeAt } from './biomes.js';
 import { drawText, drawTitleText, roundRectPath } from './ui.js';
@@ -225,12 +225,41 @@ function drawTrunks(ctx, g, pal) {
   }
 }
 
+// Dry branches are pale, leafless and cracked, so they read at a glance in every biome
+const DRY_FILL = '#d2c3a3';
+const DRY_LIGHT = '#ece2c9';
+const DRY_EDGE = '#6e5a44';
+
 function drawBranch(ctx, g, b, pal) {
   const sy = toScreenY(g, b.y);
-  if (sy < -50 || sy > g.h + 50) return;
+  if (sy < -50 || sy > g.h + 160) return;
   const dir = b.side === 'left' ? 1 : -1;
   const xBase = b.side === 'left' ? CFG.trunkW - 6 : g.w - CFG.trunkW + 6;
   const tip = xBase + dir * (b.len + 6);
+
+  ctx.save();
+
+  // A snapped branch drops away, spinning and fading
+  if (b.state === 'broken') {
+    if (b.fallT > 0.9) { ctx.restore(); return; }
+    const drop = 450 * b.fallT * b.fallT * 2;
+    ctx.globalAlpha = Math.max(0, 1 - b.fallT / 0.9);
+    ctx.translate(tip, sy + drop);
+    ctx.rotate(dir * b.fallT * 2.2);
+    ctx.translate(-tip, -sy);
+  }
+
+  // A cracking branch shakes harder as it nears snapping
+  let progress = 0;
+  if (b.state === 'cracking') {
+    progress = 1 - Math.max(0, b.crackT) / b.crackDur;
+    const amp = 1 + 3.5 * progress;
+    ctx.translate(Math.sin(g.time * 70) * amp, Math.cos(g.time * 83) * amp * 0.6);
+  }
+
+  const fill = b.dry ? DRY_FILL : pal.branch;
+  const edge = b.dry ? DRY_EDGE : pal.trunkDark;
+  const light = b.dry ? DRY_LIGHT : pal.branchLight;
 
   // Tapered branch, flat on top so the animal stands on it
   ctx.beginPath();
@@ -239,35 +268,66 @@ function drawBranch(ctx, g, b, pal) {
   ctx.quadraticCurveTo(tip + dir * 5, sy + 6, tip - dir * 4, sy + 10);
   ctx.lineTo(xBase, sy + 28);
   ctx.closePath();
-  ctx.fillStyle = pal.branch;
+  ctx.fillStyle = fill;
   ctx.fill();
   ctx.lineWidth = 3;
   ctx.lineJoin = 'round';
-  ctx.strokeStyle = pal.trunkDark;
+  ctx.strokeStyle = edge;
   ctx.stroke();
 
   // Highlight along the top
-  ctx.strokeStyle = pal.branchLight;
+  ctx.strokeStyle = light;
   ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.moveTo(xBase + dir * 4, sy + 4);
   ctx.lineTo(tip - dir * 12, sy + 4);
   ctx.stroke();
 
-  // Leaf clusters at the tip and part way along
-  ctx.fillStyle = pal.leaf;
-  ctx.strokeStyle = pal.leafDark;
-  ctx.lineWidth = 2.5;
-  const clump = (x, y, r) => {
+  if (b.dry) {
+    // Cracks: two always, more as it nears snapping
+    ctx.strokeStyle = edge;
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    const cracks = 2 + Math.floor(progress * 4);
     ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fill();
+    for (let i = 0; i < cracks; i++) {
+      const cx = xBase + dir * b.len * (0.2 + 0.7 * (((i * 0.37 + b.id * 0.13) % 1)));
+      ctx.moveTo(cx, sy + 1);
+      ctx.lineTo(cx + dir * 4, sy + 9);
+      ctx.lineTo(cx - dir * 3, sy + 15);
+      ctx.lineTo(cx + dir * 3, sy + 24);
+    }
     ctx.stroke();
-  };
-  clump(tip, sy + 3, 12);
-  clump(tip - dir * 15, sy - 3, 9);
-  clump(tip - dir * 7, sy + 13, 8);
-  clump(xBase + dir * b.len * 0.45, sy + 20, 8);
+    // Bare twigs instead of leaves
+    ctx.beginPath();
+    ctx.moveTo(tip - dir * 4, sy + 3);
+    ctx.lineTo(tip + dir * 10, sy - 9);
+    ctx.moveTo(tip - dir * 14, sy + 2);
+    ctx.lineTo(tip - dir * 8, sy - 11);
+    ctx.stroke();
+    // Last third of the countdown: a red warning pulse
+    if (progress > 0.65) {
+      ctx.globalAlpha = 0.25 + 0.2 * Math.sin(g.time * 40);
+      ctx.fillStyle = '#ff3b30';
+      ctx.fillRect(Math.min(xBase, tip) - 4, sy - 2, b.len + 14, 30);
+    }
+  } else {
+    // Leaf clusters at the tip and part way along
+    ctx.fillStyle = pal.leaf;
+    ctx.strokeStyle = pal.leafDark;
+    ctx.lineWidth = 2.5;
+    const clump = (x, y, r) => {
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    };
+    clump(tip, sy + 3, 12);
+    clump(tip - dir * 15, sy - 3, 9);
+    clump(tip - dir * 7, sy + 13, 8);
+    clump(xBase + dir * b.len * 0.45, sy + 20, 8);
+  }
+  ctx.restore();
 }
 
 function drawPlayer(ctx, g, p) {
@@ -383,6 +443,7 @@ export function drawHazards(ctx, g) {
 
   // Warning markers at the top of the screen
   for (const tg of g.hz.telegraphs) {
+    if (tg.delay > 0) continue; // later hazards of a wave are not announced yet
     const pulse = 1 + 0.15 * Math.sin(tg.t * 30);
     const s = 20 * pulse;
     ctx.save();
@@ -406,40 +467,14 @@ export function drawHazards(ctx, g) {
     ctx.restore();
   }
 
-  const camAdd = HAZ.camFollow * (g.camVel || 0);
   for (const h of g.hz.pool) {
     if (!h.active) continue;
-
-    // Motion streak behind the hazard, so the fall direction reads clearly
-    // even when the background is scrolling past quickly
-    const vy = h.vy + camAdd;
-    const speed = Math.hypot(h.vx || 0, vy);
-    const len = Math.min(80, speed * 0.11);
-    if (len > 8) {
-      const ux = (h.vx || 0) / speed;
-      const uy = vy / speed;
-      ctx.save();
-      ctx.lineCap = 'round';
-      for (const [w, a, f] of [[1.5, 0.16, 1], [1.0, 0.24, 0.7], [0.5, 0.34, 0.4]]) {
-        ctx.strokeStyle = `rgba(255,255,255,${a})`;
-        ctx.lineWidth = h.r * w;
-        ctx.beginPath();
-        ctx.moveTo(h.x, h.y);
-        ctx.lineTo(h.x - ux * len * f, h.y - uy * len * f);
-        ctx.stroke();
-      }
-      ctx.strokeStyle = 'rgba(58,36,16,0.22)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(h.x - h.r * 0.5, h.y - uy * 4);
-      ctx.lineTo(h.x - h.r * 0.5 - ux * len * 0.9, h.y - uy * len * 0.9);
-      ctx.moveTo(h.x + h.r * 0.5, h.y - uy * 4);
-      ctx.lineTo(h.x + h.r * 0.5 - ux * len * 0.9, h.y - uy * len * 0.9);
-      ctx.stroke();
-      ctx.restore();
-    }
-
     ctx.save();
+    // In mist, hazards only become visible as they get close to the player's height
+    if (pal.hazFade > 0.01) {
+      const vis = Math.min(1, Math.max(0, (h.y - g.h * 0.22) / (g.h * 0.2)));
+      ctx.globalAlpha = 1 - pal.hazFade * (1 - vis) * 0.9;
+    }
     ctx.translate(h.x, h.y);
     ctx.rotate(h.rot);
     // Light halo so hazards stand out from every biome background

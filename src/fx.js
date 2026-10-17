@@ -78,6 +78,26 @@ export function createFx() {
       }
     },
 
+    // Leaves blown across the screen as a warning before a gust of wind
+    gustLeaves(dir, w, h) {
+      const colors = ['#f08a2c', '#d96a1a', '#c9a227', '#7acb4a', '#b3501a'];
+      for (let i = 0; i < 28; i++) {
+        add({
+          screen: true, rect: true, x: dir > 0 ? rand(-60, -10) : w + rand(10, 60), y: rand(0, h),
+          vx: dir * rand(380, 640), vy: rand(-40, 70), g: 0,
+          life: rand(1.4, 2.0), max: 2.0, size: rand(7, 12),
+          color: colors[i % colors.length], alpha: 0.9, rot: rand(0, 6), spin: rand(-10, 10),
+        });
+      }
+    },
+
+    // Tapped a side with nothing to jump to
+    bonk() {
+      shakeAmp = Math.max(shakeT > 0 ? shakeAmp : 0, 3 * (reduceMotion ? 0.25 : 1));
+      shakeDur = 0.12;
+      shakeT = 0.12;
+    },
+
     pop(x, y, text, color = '#ffffff', size = 24) {
       pops.push({ x, y, text, color, size, t: 0.8 });
     },
@@ -102,6 +122,12 @@ export function createFx() {
 
     // Scale for the player sprite, anchored at the feet
     scaleFor(p) {
+      if (p.falling) return { x: 0.85, y: 1.2 };
+      if (p.stumble > 0) {
+        // A quick wobble while tripping
+        const wob = Math.sin(p.stumble * 70) * 0.2 * Math.min(1, p.stumble / 0.1);
+        return { x: 1 + wob, y: 1 - wob * 0.8 };
+      }
       if (p.jumping) {
         const sy = 1 + 0.22 * Math.sin(Math.min(1, p.t) * Math.PI);
         return { x: 1 / sy, y: sy };

@@ -1,8 +1,9 @@
-// The playing state: world, player, camera, hazards, hearts, scoring, game feel.
+// The playing state: world, player, camera, hazards, dry branches, wind, hearts,
+// scoring and game feel.
 
-import { CFG, RUN, scrollSpeed } from './config.js';
+import { CFG, RUN, WIND, scrollSpeed, landingPoints, crackTime } from './config.js';
 import { createWorld } from './world.js';
-import { createPlayer, pressDirection, updatePlayer } from './player.js';
+import { createPlayer, pressDirection, updatePlayer, startFall } from './player.js';
 import { createHazards } from './hazards.js';
 import { CHARACTERS } from './characters.js';
 import { biomeAt, SUMMIT_M } from './biomes.js';
@@ -16,27 +17,53 @@ const DYING_FALL = 0.3;        // short beat when you simply fall off the bottom
 
 const metres = (g) => Math.max(0, Math.floor((g.player.maxY - CFG.startY) / CFG.unitsPerMeter));
 const playerScreenY = (g) => toScreenY(g, g.player.y) - CFG.playerR;
+const climbedOf = (g) => Math.max(0, g.player.maxY - CFG.startY);
 
 function onJump(g) {
   g.fx.dust(g.player.x, g.player.y, 3);
   if (g.audio) g.audio.jump();
 }
 
+// A dry branch starts cracking the moment you stand on it
+function startCrack(g, b) {
+  if (!b.dry || b.state !== 'ok') return;
+  b.state = 'cracking';
+  b.crackDur = crackTime(climbedOf(g));
+  b.crackT = b.crackDur;
+  b.tick = 0;
+}
+
 function onLand(g) {
   const { run, player, fx } = g;
+  const b = player.branch;
   run.streak = run.t - run.lastLand <= RUN.streakWindow ? run.streak + 1 : 1;
   run.lastLand = run.t;
   run.mult = Math.min(RUN.streakMax, 1 + Math.floor(run.streak / RUN.streakStep));
-  const points = RUN.landPoints * run.mult;
-  run.score += points;
+  const dry = !!(b && b.dry);
+  const scored = landingPoints(player.lastRise, dry) * run.mult;
+  run.score += scored;
   if (g.audio) g.audio.land(run.streak);
   fx.dust(player.x, player.y, 7);
   fx.squash();
-  fx.pop(player.x, playerScreenY(g) - 46, run.mult > 1 ? `+${points}  x${run.mult}` : `+${points}`,
-    run.mult > 1 ? '#ffd236' : '#ffffff', run.mult > 1 ? 28 : 24);
+  const label = run.mult > 1 ? `+${scored}  x${run.mult}` : `+${scored}`;
+  fx.pop(player.x, playerScreenY(g) - 46, label,
+    dry ? '#ffb347' : run.mult > 1 ? '#ffd236' : '#ffffff', run.mult > 1 || dry ? 28 : 24);
+  if (b) startCrack(g, b);
 }
 
-function onHit(g) {
+// Caught a branch on the way down after a snap: no points, streak lost
+function onCatch(g) {
+  const { run, player, fx } = g;
+  run.streak = 0;
+  run.mult = 1;
+  fx.dust(player.x, player.y, 6);
+  fx.squash();
+  if (g.audio) g.audio.land(1);
+  if (player.branch) startCrack(g, player.branch);
+}
+
+// Shared by hazard hits and snapped branches. Returns true if that was the last heart.
+function loseHeart(g, label, shakeAmp) {
   const { run, player, fx } = g;
   const before = run.score;
   run.hearts--;
@@ -44,16 +71,29 @@ function onHit(g) {
   run.invuln = RUN.invuln;
   run.streak = 0;
   run.mult = 1;
-  if (g.audio) g.audio.hit();
   const px = player.x;
   const py = playerScreenY(g);
   fx.sparks(px, py, '#ffb703', 14);
-  fx.shake(10, 0.3);
+  fx.shake(shakeAmp, 0.3);
   fx.hitFlash();
   fx.heartLost(run.hearts);
   const lost = before - run.score;
-  fx.pop(px, py - 46, lost > 0 ? `-${lost}` : 'Ouch!', '#ff5a5f', 28);
+  fx.pop(px, py - 46, label || (lost > 0 ? `-${lost}` : 'Ouch!'), '#ff5a5f', 28);
   buzz(80);
+  return run.hearts <= 0;
+}
+
+function onHit(g) {
+  if (g.audio) g.audio.hit();
+  return loseHeart(g, null, 10);
+}
+
+// The branch under the player snapped
+function onSnap(g) {
+  if (g.audio) g.audio.hit();
+  const dead = loseHeart(g, 'SNAP!', 12);
+  if (dead) startDying(g, 'hearts');
+  else startFall(g.player);
 }
 
 // Death plays out in slow motion before the game over screen
@@ -99,10 +139,10 @@ function updateDying(g, realDt) {
   run.t += dt;
 
   // The world keeps moving, slowly
-  cam.y += scrollSpeed(Math.max(0, player.maxY - CFG.startY)) * dt;
+  cam.y += scrollSpeed(climbedOf(g)) * dt;
   world.ensure(cam.y + g.h + 600);
   world.prune(cam.y);
-  hz.update(dt, { h: g.h, climbed: Math.max(0, player.maxY - CFG.startY), aimX: player.x });
+  hz.update(dt, { h: g.h, climbed: climbedOf(g), aimX: player.x });
 
   // Knocked out: a small hop, then a tumbling fall
   if (dying.reason === 'hearts') {
@@ -114,6 +154,66 @@ function updateDying(g, realDt) {
   if (dying.t >= dying.duration) endRun(g, dying.reason);
 }
 
+// Cracking branches count down; a branch that runs out snaps with whoever is on it
+function updateDry(g, dt) {
+  const { world, player, fx } = g;
+  for (const side of ['left', 'right']) {
+    for (const b of world.lists[side]) {
+      if (b.state === 'cracking') {
+        b.crackT -= dt;
+        b.tick -= dt;
+        const progress = 1 - Math.max(0, b.crackT) / b.crackDur;
+        if (b.tick <= 0 && b.crackT > 0) {
+          b.tick = 0.22 - 0.14 * progress;
+          if (g.audio) g.audio.creak(progress);
+          fx.dust(b.landX, b.y, 2);
+        }
+        if (b.crackT <= 0) {
+          b.state = 'broken';
+          b.fallT = 0;
+          fx.dust(b.landX, b.y, 8);
+          if (g.audio) g.audio.snap();
+          if (player.branch === b && !player.jumping && !player.falling) {
+            onSnap(g);
+            if (g.dying) return;
+          }
+        }
+      } else if (b.state === 'broken') {
+        b.fallT += dt;
+      }
+    }
+  }
+}
+
+// Gusts of wind: leaves blow in as a warning, then hazards are pushed sideways
+function updateWind(g, dt) {
+  const wind = g.wind;
+  const strengthOf = g.pal.wind || 0;
+  if (wind.active) {
+    const a = wind.active;
+    a.t += dt;
+    if (a.t >= a.warn + a.dur) {
+      wind.active = null;
+      wind.x = 0;
+    } else if (a.t >= a.warn) {
+      wind.x = a.dir * a.strength * Math.sin(Math.PI * ((a.t - a.warn) / a.dur));
+    } else {
+      wind.x = 0;
+    }
+    return;
+  }
+  wind.x = 0;
+  if (strengthOf < 0.15) return;
+  wind.timer -= dt * strengthOf;
+  if (wind.timer <= 0) {
+    const dir = Math.random() < 0.5 ? -1 : 1;
+    wind.active = { t: 0, warn: WIND.warn, dur: WIND.dur, dir, strength: WIND.strength * Math.min(1.3, strengthOf) };
+    wind.timer = WIND.gapMin + Math.random() * (WIND.gapMax - WIND.gapMin);
+    g.fx.gustLeaves(dir, g.w, g.h);
+    if (g.audio) g.audio.wind();
+  }
+}
+
 export const playState = {
   enter(g) {
     g.world = createWorld();
@@ -123,7 +223,8 @@ export const playState = {
     g.fx = createFx();
     g.dying = null;
     g.hz = createHazards();
-    g.hz.onSpawn = () => { if (g.audio && !g.dying) g.audio.warn(); };
+    g.hz.onSpawn = (s) => { if (g.audio && !g.dying && s.first) g.audio.warn(); };
+    g.wind = { timer: 3, x: 0, active: null };
     g.biomeM = 0;
     g.pal = biomeAt(0);
     g.run = {
@@ -149,9 +250,16 @@ export const playState = {
     for (const a of moves) {
       if (pressDirection(player, world, a)) onJump(g);
     }
+    // Tapped a side with nothing to jump to: a short stumble
+    if (player.blocked) {
+      player.blocked = false;
+      fx.bonk();
+      if (g.audio) g.audio.bonk();
+    }
 
     const events = updatePlayer(player, world, dt);
     if (events.includes('land')) onLand(g);
+    if (events.includes('catch')) onCatch(g);
     if (events.includes('jump')) onJump(g);
 
     // Tutorial hold: nothing moves until the player makes their first jump
@@ -188,7 +296,7 @@ export const playState = {
     }
 
     // Camera rises steadily; it is pushed up if the player climbs past the follow line
-    const climbed = Math.max(0, player.maxY - CFG.startY);
+    const climbed = climbedOf(g);
     const camBefore = cam.y;
     cam.y += scrollSpeed(climbed) * dt;
     const over = player.y - cam.y - g.h * CFG.followLine;
@@ -205,14 +313,20 @@ export const playState = {
     world.ensure(cam.y + g.h + 600);
     world.prune(cam.y);
 
-    // Hazards (screen space). They aim near where the player is, or is jumping to.
+    updateDry(g, dt);
+    if (g.dying) return;
+    updateWind(g, dt);
+
+    // Hazards (screen space). They aim at where the player is, or is jumping to.
+    // On a ladder stretch the player is stuck on one tree, so nothing is aimed there.
     const feetY = toScreenY(g, player.y);
     const aimX = player.jumping ? player.to.landX : player.x;
-    hz.update(dt, { h: g.h, climbed, aimX, camSpeed: g.camVel });
+    const section = world.sectionAt(player.y);
+    const blockedSide = section && section.kind === 'ladder' ? section.side : undefined;
+    hz.update(dt, { h: g.h, climbed, aimX, camSpeed: g.camVel, windX: g.wind.x, blockedSide });
 
     if (run.invuln <= 0 && hz.collide(player.x, feetY - CFG.playerR, CFG.playerR * 0.8)) {
-      onHit(g);
-      if (run.hearts <= 0) return startDying(g, 'hearts');
+      if (onHit(g)) return startDying(g, 'hearts');
     }
 
     // Falling below the bottom edge ends the run

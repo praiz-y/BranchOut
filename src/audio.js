@@ -150,6 +150,40 @@ export function createAudio() {
     newBest() {
       [523, 659, 784, 1047].forEach((f, i) => tone(f, f, 0.16, 'square', 0.1, 0.15 + i * 0.1));
     },
+    // A dry branch creaking: gets higher and sharper as it nears snapping
+    creak(progress = 0) {
+      const f = 150 + progress * 260;
+      tone(f, f * 0.8, 0.07, 'sawtooth', 0.07 + progress * 0.06);
+      noise(0.03, 0.05, 1200 + progress * 1500);
+    },
+    snap() {
+      noise(0.12, 0.4, 2600);
+      tone(520, 90, 0.18, 'square', 0.18);
+    },
+    bonk() {
+      tone(140, 70, 0.1, 'triangle', 0.22);
+    },
+    wind() {
+      if (!ctx || !noiseBuf) return;
+      const t = ctx.currentTime;
+      const src = ctx.createBufferSource();
+      src.buffer = noiseBuf;
+      src.loop = true;
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(400, t);
+      filter.frequency.exponentialRampToValueAtTime(1400, t + 1.0);
+      filter.frequency.exponentialRampToValueAtTime(400, t + 2.1);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.18, t + 0.7);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 2.1);
+      src.connect(filter);
+      filter.connect(g);
+      g.connect(sfxBus);
+      src.start(t);
+      src.stop(t + 2.2);
+    },
     summit() {
       [392, 523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, f, 0.25, 'triangle', 0.22, i * 0.11));
     },
